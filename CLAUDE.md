@@ -28,6 +28,229 @@ npx ampx sandbox --profile sample
 - **AI統合**: Amazon BedrockとVercel AI SDK
 - **スタイリング**: カレーテーマのカラースキームを使用したTailwind CSS
 
+## フロントエンド開発ルール
+
+### 1. App Routerディレクトリ構造
+
+Next.js App Routerでは、`app/` ディレクトリ内のファイル構造がURLルートに直接マッピングされます：
+
+```
+app/
+├── page.tsx              # / (ルートページ)
+├── layout.tsx            # 全体レイアウト
+├── error.tsx             # エラーバウンダリ
+├── loading.tsx           # ローディングUI
+├── not-found.tsx         # 404ページ
+├── globals.css           # グローバルスタイル
+├── about/
+│   └── page.tsx          # /about
+├── blog/
+│   ├── page.tsx          # /blog
+│   └── [slug]/
+│       └── page.tsx      # /blog/[slug] (動的ルート)
+└── (auth)/               # ルートグループ（URLに影響しない）
+    ├── login/
+    │   └── page.tsx      # /login
+    └── register/
+        └── page.tsx      # /register
+```
+
+### 2. Server ComponentsとClient Components
+
+デフォルトではすべてのコンポーネントはServer Componentsとして扱われます。Client Componentsを使用する場合は、ファイルの先頭に`'use client'`ディレクティブを追加します：
+
+```typescript
+// Server Component (デフォルト)
+// app/components/ServerComponent.tsx
+async function ServerComponent() {
+  // サーバーサイドでデータフェッチ
+  const data = await fetch('https://api.example.com/data')
+  return <div>{data}</div>
+}
+
+// Client Component
+// app/components/ClientComponent.tsx
+'use client'
+
+import { useState } from 'react'
+
+export function ClientComponent() {
+  const [count, setCount] = useState(0)
+  return <button onClick={() => setCount(count + 1)}>{count}</button>
+}
+```
+
+#### 使い分けのガイドライン
+
+- **Server Components**: データフェッチ、静的コンテンツ、SEO重要なコンテンツ
+- **Client Components**: インタラクティブなUI、ブラウザAPIの使用、React Hooksの使用
+
+### 3. データフェッチングパターン
+
+#### Server Componentsでのデータフェッチ
+
+```typescript
+// app/posts/page.tsx
+async function PostsPage() {
+  // 直接async/awaitでデータを取得
+  const posts = await fetch('https://api.example.com/posts', {
+    next: { revalidate: 3600 } // 1時間ごとに再検証
+  })
+  
+  return (
+    <div>
+      {posts.map((post) => (
+        <PostCard key={post.id} post={post} />
+      ))}
+    </div>
+  )
+}
+```
+
+#### Client Componentsでのデータフェッチ
+
+```typescript
+'use client'
+
+import { useState, useEffect } from 'react'
+
+export function ClientPosts() {
+  const [posts, setPosts] = useState([])
+  
+  useEffect(() => {
+    fetch('/api/posts')
+      .then(res => res.json())
+      .then(setPosts)
+  }, [])
+  
+  return <div>{/* posts rendering */}</div>
+}
+```
+
+### 4. レイアウトとテンプレート
+
+#### layout.tsx (永続的レイアウト)
+
+```typescript
+// app/dashboard/layout.tsx
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex">
+      <Sidebar /> {/* 共通サイドバー */}
+      <main className="flex-1">{children}</main>
+    </div>
+  )
+}
+```
+
+#### template.tsx (ページ遷移時に再マウント)
+
+```typescript
+// app/dashboard/template.tsx
+'use client'
+
+export default function Template({ children }: { children: React.ReactNode }) {
+  // ページ遷移のたびに実行される
+  useEffect(() => {
+    console.log('ページが変更されました')
+  }, [])
+  
+  return <div>{children}</div>
+}
+```
+
+### 5. ナビゲーション
+
+#### Linkコンポーネント（推奨）
+
+```typescript
+import Link from 'next/link'
+
+export function Navigation() {
+  return (
+    <nav>
+      <Link href="/">ホーム</Link>
+      <Link href="/about">About</Link>
+      <Link href={`/blog/${post.slug}`}>記事詳細</Link>
+    </nav>
+  )
+}
+```
+
+#### useRouterフック（Client Components内）
+
+```typescript
+'use client'
+
+import { useRouter } from 'next/navigation'
+
+export function NavigateButton() {
+  const router = useRouter()
+  
+  return (
+    <button onClick={() => router.push('/dashboard')}>
+      ダッシュボードへ
+    </button>
+  )
+}
+```
+
+### 6. API Routes
+
+API Routesは`app/api/`ディレクトリ内の`route.ts`ファイルで定義します：
+
+```typescript
+// app/api/posts/route.ts
+import { NextRequest } from 'next/server'
+
+export async function GET(request: NextRequest) {
+  const posts = await getPosts()
+  return Response.json(posts)
+}
+
+export async function POST(request: NextRequest) {
+  const body = await request.json()
+  const newPost = await createPost(body)
+  return Response.json(newPost, { status: 201 })
+}
+```
+
+### 7. エラーハンドリング
+
+```typescript
+// app/posts/error.tsx
+'use client'
+
+export default function Error({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string }
+  reset: () => void
+}) {
+  return (
+    <div>
+      <h2>エラーが発生しました</h2>
+      <button onClick={() => reset()}>再試行</button>
+    </div>
+  )
+}
+```
+
+### 8. ローディング状態
+
+```typescript
+// app/posts/loading.tsx
+export default function Loading() {
+  return <div>読み込み中...</div>
+}
+```
+
+
 ## バックエンド開発ルール
 
 ### 1. Amplifyバックエンド設定
