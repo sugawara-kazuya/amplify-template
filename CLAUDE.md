@@ -252,3 +252,35 @@ export const handler: Handler = async (event: eventType, _context: Context) => {
       },
   });
 ```
+
+## Lambdaの呼び出し方
+
+```typescript
+const [prompt, setPrompt] = useState("")
+const [aiMessage, setAiMessage] = useState("")
+
+async function invokeBedrock() {
+
+  const { credentials } = await fetchAuthSession()
+  const awsRegion = outputs.auth.aws_region
+  const functionName = outputs.custom.invokeBedrockFunctionName
+
+  const labmda = new LambdaClient({ credentials: credentials, region: awsRegion })
+  const command = new InvokeWithResponseStreamCommand({
+    FunctionName: functionName,
+    Payload: new TextEncoder().encode(JSON.stringify({ prompt: prompt }))
+  })
+  const apiResponse = await labmda.send(command);
+
+  let completeMessage = ''
+  if (apiResponse.EventStream) {
+    for await (const item of apiResponse.EventStream) {
+      if (item.PayloadChunk) {
+        const payload = new TextDecoder().decode(item.PayloadChunk.Payload)
+        completeMessage = completeMessage + payload
+        setAiMessage(completeMessage)
+      }
+    }
+  }
+}
+```
